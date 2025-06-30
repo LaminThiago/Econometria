@@ -1,0 +1,134 @@
+---
+title: "Projeto_inferencia"
+format: html
+editor: visual
+---
+
+## Projeto Inferencia
+
+```{r}
+library(readxl)
+library(dplyr)
+library(lubridate)
+library(readr)
+library(vroom)
+library(car)
+library(ggplot2)
+library(MASS)
+library(tidyverse)
+library(caTools)
+library(caret)
+library(car)
+library(psych)
+library(MASS)
+
+df <- read.csv("dados.csv")
+```
+
+```{r}
+col <- c("PC_FORMACAO_DOCENTE_MEDIO", "matriculados", "nota", "experiencia_prof", "carga_horaria", "salario_medio", "idade", "tempo")
+cont <- df[,col]
+```
+
+```{r}
+par(oma = c(2, 2, 2, 2), mar = c(4, 4, 2, 1))
+options(repr.plot.width = 15, repr.plot.height = 15) 
+pairs.panels(cont,
+             method = "pearson", 
+             hist.col = "blue", 
+             density = TRUE, 
+             ellipses = TRUE)
+```
+
+```{r}
+#df$sh <- df$salario_medio / df$carga_horaria
+df$ID_AREA <- as.factor(df$ID_AREA)
+df$ID_LOCALIZACAO <- as.factor(df$ID_LOCALIZACAO)
+df$NIVEL_SOCIO_ECONOMICO <- as.factor(df$NIVEL_SOCIO_ECONOMICO)
+df$IN_PUBLICA <- NULL
+```
+
+```{r}
+ggplot(df, aes(x = nota)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") + # 'binwidth' ajusta a largura das barras
+  labs(
+    title = "Nota - SAEB",
+    x = "NOTA (TRI)",
+    y = "Frequência"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+media_dados <- mean(df$nota)
+sd_dados <- sd(df$nota)
+Q1 <- quantile(df$nota, 0.25)
+Q3 <- quantile(df$nota, 0.75)
+cat("Média: ", media_dados, "\n")
+cat("Desvio Padrão: ", sd_dados, "\n")
+cat("Primeiro Quartil: ", Q1, "\n")
+cat("Terceiro Quartil: ", Q3, "\n")
+cat("Máximo: ", max(df$nota), "\n")
+cat("Mínimo: ", min(df$nota), "\n")
+```
+
+```{r}
+old_op <- options()
+options(scipen=9)
+```
+
+```{r}
+modelo <- lm(nota ~ NIVEL_SOCIO_ECONOMICO + ID_AREA + ID_LOCALIZACAO + PC_FORMACAO_DOCENTE_MEDIO +  salario_medio + carga_horaria + tempo + experiencia_prof + magisterio + licenciatura + especializacao + pos_grad + idade + taxa_participacao, data = df)
+summary(modelo)
+```
+
+```{r}
+library(lmtest) # Para coeftest
+library(sandwich)
+erros_padrao_robustos <- vcovHC(modelo, type = "HC3")
+coeftest(modelo, vcov = erros_padrao_robustos)
+```
+
+```{r}
+vif(modelo) #Teste de Multicolinearidade, idealmente menor que 10
+```
+
+```{r}
+shapiro.test(sample(modelo$residuals, 5000)) #Normalidade dos residuos
+```
+
+```{r}
+library(qqplotr)
+ggplot(modelo, aes(sample = modelo$residuals)) +
+  stat_qq_band(distribution = "norm", conf = 0.95, fill = "lightblue") +  # Envelope
+  stat_qq_line(distribution = "norm", col = "red") +  # Linha teórica
+  stat_qq_point(distribution = "norm") +  # Pontos do QQ-plot
+  labs(title = "Gráfico de Envelope para Teste de Normalidade") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(data.frame(residuos = modelo$residuals), aes(x = residuos)) +
+  geom_histogram(binwidth = 1, fill = "blue", alpha = 0.5) +
+  theme_minimal()
+```
+
+```{r}
+library(lmtest)
+bptest(modelo) #Homocedasticidade
+```
+
+```{r}
+dwtest(modelo) #Independencia dos erros
+```
+
+```{r}
+ggplot(data.frame(ajustados = fitted(modelo), residuos = residuals(modelo)), aes(x = ajustados, y = residuos)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  theme_minimal()
+```
+
+```{r}
+anova(modelo)
+```

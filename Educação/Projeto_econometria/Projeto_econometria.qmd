@@ -1,0 +1,160 @@
+---
+title: "Projeto_econometria"
+---
+
+## Econometria
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+#diretor <- read.csv("Dados/TS_DIRETOR.csv", sep=";")
+escola <- read.csv("Dados/TS_ESCOLA.csv")
+#aluno <- read.csv("Dados/TS_ALUNO_34EM.csv", sep=";")
+  #item <- read.csv("Dados/TS_ITEM.csv", sep=";")
+#prof <- read.csv("Dados/TS_PROFESSOR.csv", sep=";")
+```
+
+```{r}
+cols_com_tipos <- c(
+  "ID_ESCOLA" = "integer",         # Assumindo que ID_ESCOLA é um número inteiro
+  "PROFICIENCIA_MT_SAEB" = "numeric", # Proficiência geralmente é numérica (pode ter casas decimais)
+  "PROFICIENCIA_LP_SAEB" = "numeric"  # Proficiência geralmente é numérica
+)
+
+# Agora, carregue o CSV usando a especificação correta
+aluno <- read.csv("Dados/TS_ALUNO_34EM.csv", colClasses = cols_com_tipos, sep = ";")
+```
+
+```{r}
+cols <- c("ID_ESCOLA", "PROFICIENCIA_MT_SAEB", "PROFICIENCIA_LP_SAEB")
+aluno <- aluno %>%
+  dplyr::select(cols)
+```
+
+```{r}
+prof <- read.csv("Dados/TS_PROFESSOR.csv", sep=";")
+```
+
+```{r}
+escola <- dplyr::select(escola, ID_MUNICIPIO, ID_ESCOLA, ID_UF, IN_PUBLICA, ID_AREA, ID_LOCALIZACAO, PC_FORMACAO_DOCENTE_MEDIO, NIVEL_SOCIO_ECONOMICO, TAXA_PARTICIPACAO_EMT, TAXA_PARTICIPACAO_EMI, TAXA_PARTICIPACAO_EM, NU_MATRICULADOS_CENSO_EMT, NU_MATRICULADOS_CENSO_EMI, NU_MATRICULADOS_CENSO_EM, MEDIA_EM_LP, MEDIA_EMT_LP, MEDIA_EMI_LP, MEDIA_EM_MT, MEDIA_EMT_MT, MEDIA_EMI_MT)
+```
+
+```{r}
+matric <- c("NU_MATRICULADOS_CENSO_EMT", "NU_MATRICULADOS_CENSO_EMI", "NU_MATRICULADOS_CENSO_EM")
+escola$matriculados <- rowSums(escola[, matric], na.rm = TRUE)
+media <- c("MEDIA_EM_LP", "MEDIA_EMT_LP", "MEDIA_EMI_LP", "MEDIA_EM_MT", "MEDIA_EMT_MT","MEDIA_EMI_MT")
+escola$nota <- rowMeans(escola[, media], na.rm = TRUE)
+
+```
+
+```{r}
+tx_part <- c("TAXA_PARTICIPACAO_EMT", "TAXA_PARTICIPACAO_EM", "TAXA_PARTICIPACAO_EMI")
+escola$taxa_participacao <- rowMeans(escola[, tx_part], na.rm = TRUE)
+escola <- escola %>%
+  dplyr::select(-all_of(c(matric, media, tx_part)))
+escola <- na.omit(escola)
+```
+
+```{r}
+prof <- prof %>%
+  dplyr::select(ID_ESCOLA, TX_Q002, TX_Q020, TX_Q048, TX_Q053, TX_Q054, TX_Q055)
+```
+
+```{r}
+valores_medios <- c(
+  A = 660,
+  B = 1980.005,
+  C = 3300.005,
+  D = 4620.005,
+  E = 5940.005,
+  F = 7260.005,
+  G = 8580.005,
+  H = 12000 
+)
+prof$salario <-  valores_medios[prof$TX_Q054]
+```
+
+```{r}
+prof <- prof %>%
+  group_by(ID_ESCOLA) %>%
+  summarise(idade = mean(TX_Q002, na.rm = TRUE), 
+          magisterio = 100 * mean(TX_Q020 == "A", na.rm = TRUE),
+            licenciatura = 100 * mean(TX_Q020 == "B", na.rm = TRUE),
+            especializacao = 100 * mean(TX_Q020 == "C", na.rm = TRUE),
+            pos_grad = 100 * mean(TX_Q020 == "D" | TX_Q020 == "E", na.rm = TRUE),
+            experiencia_prof = mean(TX_Q048, na.rm = TRUE), 
+            carga_horaria = mean(TX_Q053, na.rm = TRUE), 
+            salario_medio = mean(salario, na.rm = TRUE), 
+            tempo = mean(TX_Q055, na.rm = TRUE))
+```
+
+```{r}
+df <- left_join(escola, prof, by = "ID_ESCOLA")
+df <- na.omit(df)
+```
+
+```{r}
+escolas_7 <- df[df$NIVEL_SOCIO_ECONOMICO == 7, "ID_ESCOLA"]
+escolas_1 <- df[df$NIVEL_SOCIO_ECONOMICO == 1, "ID_ESCOLA"]
+aluno_7 <- filter(aluno, aluno$ID_ESCOLA %in% escolas_7)
+aluno_1 <- filter(aluno, aluno$ID_ESCOLA %in% escolas_1)
+```
+
+```{r}
+aluno_7$nota <- rowMeans(aluno_7[, c("PROFICIENCIA_MT_SAEB", "PROFICIENCIA_LP_SAEB")], na.rm = TRUE)
+aluno_1$nota <- rowMeans(aluno_1[, c("PROFICIENCIA_MT_SAEB", "PROFICIENCIA_LP_SAEB")], na.rm = TRUE)
+aluno_7 <- na.omit(aluno_7)
+aluno_1 <- na.omit(aluno_1)
+```
+
+```{r}
+media_dados <- mean(aluno_1$nota)
+sd_dados <- sd(aluno_1$nota)
+Q1 <- quantile(aluno_1$nota, 0.25)
+Q3 <- quantile(aluno_1$nota, 0.75)
+cat("Média: ", media_dados, "\n")
+cat("Desvio Padrão: ", sd_dados, "\n")
+cat("Primeiro Quartil: ", Q1, "\n")
+cat("Terceiro Quartil: ", Q3, "\n")
+cat("Máximo: ", max(aluno_1$nota), "\n")
+cat("Mínimo: ", min(aluno_1$nota), "\n")
+```
+
+```{r}
+ggplot(aluno_1, aes(y = nota)) + # 'y = valor' para um box plot vertical
+  geom_boxplot(fill = "lightblue", color = "darkblue") +
+  labs(
+    title = "Box Plot dos alunos categoria 1",
+    y = "Nota"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+media_dados <- mean(aluno_7$nota)
+sd_dados <- sd(aluno_7$nota)
+Q1 <- quantile(aluno_7$nota, 0.25)
+Q3 <- quantile(aluno_7$nota, 0.75)
+cat("Média: ", media_dados, "\n")
+cat("Desvio Padrão: ", sd_dados, "\n")
+cat("Primeiro Quartil: ", Q1, "\n")
+cat("Terceiro Quartil: ", Q3, "\n")
+cat("Máximo: ", max(aluno_7$nota), "\n")
+cat("Mínimo: ", min(aluno_7$nota), "\n")
+```
+
+```{r}
+ggplot(aluno_7, aes(y = nota)) + # 'y = valor' para um box plot vertical
+  geom_boxplot(fill = "lightblue", color = "darkblue") +
+  labs(
+    title = "Box Plot dos alunos categoria 7",
+    y = "Nota"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+write.csv(df, "dados.csv")
+```
